@@ -1,34 +1,45 @@
-
-from flask import Flask, request, render_template
-import numpy as np
-from sklearn.linear_model import LogisticRegression
-
-
-
-
+from flask import Flask,render_template,url_for,request
+import pandas as pd 
+import pickle
 from sklearn.feature_extraction.text import CountVectorizer
-import joblib
-
+from sklearn.linear_model import LogisticRegression
 app = Flask(__name__)
-smpo=joblib.load(open('smpo.joblib','rb'))
-count_vector=CountVectorizer()
 @app.route('/')
 def home():
-    return render_template('index.html')
-
-@app.route('/predict',methods=["GET","POST"])
+	return render_template('home.html')
+@app.route('/predict',methods=['POST'])
 def predict():
-    text_msg = request.form["sms"]
-    text_msg = np.array(text_msg)
-    my_msg = count_vector.transform(text_msg)
-    prediction =  smpo.predict(my_msg)
-    x="hii"
-    if prediction[0] == 0:
-        x = "Not a spam, it's ok "
-    else:
-        x = "it's a spam"
-    return render_template('index.html', prediction=x)
-
-
-if __name__ == "__main__":
-    app.run(debug=True)  
+	df= pd.read_csv("spam.csv", encoding="latin-1")
+	df=df.drop(['Unnamed: 2', 'Unnamed: 3', 'Unnamed: 4'],axis=1)
+	df=df.rename(columns={'v1':'label','v2': 'message'})
+	df['label']=df.label.map({'spam':0, 'ham':1})
+	# Features and Labels
+	#df['label'] = df['class'].map({'ham': 0, 'spam': 1})
+	X = df['message']
+	y = df['label']
+	
+	# Extract Feature With CountVectorizer
+	cv = CountVectorizer()
+	X = cv.fit_transform(X) # Fit the Data
+	from sklearn.model_selection import train_test_split
+	X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
+	clf = LogisticRegression()
+	clf.fit(X_train,y_train)
+	clf.score(X_test,y_test)
+	xp=""
+	#Alternative Usage of Saved Model
+	# joblib.dump(clf, 'NB_spam_model.pkl')
+	# NB_spam_model = open('NB_spam_model.pkl','rb')
+	# clf = joblib.load(NB_spam_model)    
+	if request.method == 'POST':
+		message = request.form['message']
+		data = [message]
+		vect = cv.transform(data).toarray()
+		my_prediction = clf.predict(vect)
+		if my_prediction==1:
+			xp="HAAM"
+		else:
+			xp="SPAAM"
+	return render_template('home.html',prediction = xp)
+if __name__ == '__main__':
+	app.run(debug=True)
